@@ -1,12 +1,12 @@
 # 🍲 SaveBite: Food Waste Management
 
-Aplikasi mobile (Flutter) penanggulangan pemborosan makanan (*food waste*) yang terintegrasi dengan situs web Django PWS.
+Aplikasi mobile (Flutter) penanggulangan pemborosan makanan (*food waste*) yang terintegrasi dengan situs web Django SaveBite di PWS melalui web service Django REST Framework. Dibuat untuk mata kuliah Pemrograman Berbasis Platform (PBP), Kelas D, Kelompok 8, sebagai Proyek Akhir Semester.
 
 ## 🔗 Tautan Penting
 
-- **Desain UI/UX (Figma):** [Tautan Prototipe Desain Figma](https://www.figma.com/design/Qz00q3qJVwqCvgUgkwAJ8A/Design-System?t=ncBA4Ym5KGjHdbwo-1)
+- **Desain UI/UX (Figma, view-only):** [Desain UI seluruh modul dan design system](https://www.figma.com/design/Qz00q3qJVwqCvgUgkwAJ8A/Design-System)
 - **Tautan Rilis APK:** [Belum ada]
-- **Deployment (PWS):** [Tautan Deployment PWS](https://reshandy-taftazani-savebite.pws.cs.ui.ac.id)
+- **Deployment situs web (PWS):** [reshandy-taftazani-savebite.pws.cs.ui.ac.id](https://reshandy-taftazani-savebite.pws.cs.ui.ac.id)
 
 ## 👥 Anggota Kelompok & Pembagian Modul
 
@@ -24,7 +24,7 @@ Kelas / Kelompok: PBP D / Kelompok 8
 
 Pemborosan makanan (*food waste*) merupakan salah satu isu lingkungan dan finansial terbesar saat ini. Banyak bahan makanan yang sebenarnya masih layak konsumsi namun terbuang sia-sia karena kurangnya perencanaan atau ide pengelolaannya.
 
-SaveBite hadir sebagai solusi interaktif (versi *mobile* yang terintegrasi dengan situs web Django PWS) untuk menanggulangi masalah tersebut. Aplikasi ini membantu pengguna memaksimalkan pemanfaatan bahan makanan melalui fitur rencana penyelamat makanan, pencarian resep darurat berbahan sisa, hingga ruang komunitas untuk saling berbagi resep dan sisa bahan makanan. Dengan mencatat jejak makanan secara konsisten, SaveBite bertujuan membangun kebiasaan konsumsi yang lebih bijak dan berkelanjutan.
+SaveBite hadir sebagai solusi interaktif berbasis *mobile* untuk menanggulangi masalah tersebut. Aplikasi ini membantu pengguna memaksimalkan pemanfaatan bahan makanan melalui fitur rencana penyelamatan makanan, pencarian resep darurat berbahan sisa, hingga ruang komunitas untuk saling berbagi resep dan sisa bahan makanan. Dengan mencatat jejak makanan secara konsisten, SaveBite bertujuan membangun kebiasaan konsumsi yang lebih bijak dan berkelanjutan.
 
 ## 🎯 Target Pengguna & Peran Pengguna (User Roles)
 
@@ -38,77 +38,100 @@ SaveBite hadir sebagai solusi interaktif (versi *mobile* yang terintegrasi denga
 - **Pengunjung Umum (Guest / Unauthenticated):**
   - Dapat menelusuri katalog resep publik.
   - Dapat melihat posting board tawaran/permintaan makanan komunitas.
-  - *Tidak dapat* berinteraksi langsung atau mengelola inventaris pribadi.
+  - *Tidak dapat* membuat atau mengubah data, maupun mengelola data pribadi.
 - **Pengguna Terdaftar (Authenticated User):**
-  - Mengelola kulkas/inventaris pribadi dan menyimpan resep favorit.
+  - Menyimpan resep favorit (*bookmark*) dan menambahkan catatan pribadi.
+  - Membuat dan mengelola *rescue plan* untuk bahan makanan miliknya.
   - Membagikan resep kreasi sendiri ke komunitas.
-  - Membuat atau merespons tawaran/permintaan bahan makanan di board.
+  - Membuat atau merespons permintaan bahan makanan di *request board*.
   - Mengisi dan memantau jurnal jejak makanan harian.
 
 ## 📦 Rincian Modul (Implementasi CRUD Lengkap)
 
-*Setiap modul dikembangkan secara independen pada aplikasi mobile Flutter dan terhubung ke endpoint Django REST Framework (DRF) milik masing-masing modul:*
+Setiap modul dikerjakan oleh satu anggota dan terdiri dari halaman-halaman Flutter yang terhubung ke endpoint Django REST Framework (DRF) milik modul tersebut. Seluruh operasi CRUD dijalankan melalui endpoint API pada situs web Django.
 
-### 1. Katalog Resep Bahan Sisa (TheMealDB API) — Ilham
+### 1. Katalog Resep Bahan Sisa (TheMealDB API): Muhammad Ilhami Yasya
 
-**Deskripsi:** Modul cerdas untuk mencari inspirasi resep masakan berdasarkan sisa bahan yang hampir kedaluwarsa.  
-**Model Dasar:** Menyimpan data resep favorit/bookmark dari API beserta catatan kustomisasi pengguna.  
+**Deskripsi:** Modul untuk mencari inspirasi resep masakan berdasarkan sisa bahan yang hampir kedaluwarsa.
+**Model Dasar:** Menyimpan data resep favorit/*bookmark* dari API beserta catatan kustomisasi pengguna.
 **Fitur CRUD:**
 
-- **Create:** Menyimpan (bookmark) resep hasil pencarian dari API ke dalam daftar favorit lokal.
-- **Read:** Menampilkan hasil fetch pencarian dari API TheMealDB dan membaca daftar resep yang sudah di-bookmark.
+- **Create:** Menyimpan (*bookmark*) resep hasil pencarian dari TheMealDB ke daftar favorit pengguna di database Django.
+- **Read:** Menampilkan hasil pencarian dari TheMealDB dan daftar resep yang sudah di-*bookmark*.
 - **Update:** Mengedit catatan atau tips pribadi pada resep yang telah disimpan.
-- **Delete:** Menghapus resep dari daftar bookmark.
+- **Delete:** Menghapus resep dari daftar *bookmark*.
 
-### 2. Food Rescue Planner — Mutia
+### 2. Food Rescue Planner: Mutia Muthmainnah
 
-**Deskripsi:** Perencana aksi untuk menyelamatkan bahan makanan dengan target dan metode yang jelas (misal: dimasak, diawetkan).  
-**Model Dasar:** Menyimpan nama bahan, jumlah, target tanggal, metode aksi, dan status progres (On Going, Success, Failed).  
+**Deskripsi:** Perencana aksi untuk menyelamatkan bahan makanan dengan target dan metode yang jelas (misalnya dimasak atau diawetkan).
+**Model Dasar:** Menyimpan nama bahan, jumlah, target tanggal, metode aksi, dan status progres (On Going, Success, Failed).
 **Fitur CRUD:**
 
-- **Create:** Membuat rescue plan baru dengan detail nama, jumlah, target, dan metode aksi.
-- **Read:** Melihat daftar rescue plan yang aktif beserta status progresnya.
+- **Create:** Membuat *rescue plan* baru dengan detail nama, jumlah, target, dan metode aksi.
+- **Read:** Melihat daftar *rescue plan* beserta status progresnya.
 - **Update:** Mengubah jumlah, target tanggal, metode aksi, atau status (menjadi Success/Failed).
 - **Delete:** Menghapus rencana yang sudah dibatalkan atau tidak relevan.
 
-**Integrasi:** Rescue plan yang berstatus Success atau Failed akan terhubung otomatis ke modul Jurnal Jejak Makanan (Geo) untuk pencatatan akhir.
+**Integrasi:** *Rescue plan* yang berstatus Success atau Failed terhubung otomatis ke modul Jurnal Jejak Makanan (Georgius) untuk pencatatan akhir.
 
-### 3. Resep Komunitas — Lalita
+### 3. Resep Komunitas: Silvia Lalita Damayanti
 
-**Deskripsi:** Ruang berbagi (feed) tempat pengguna mempublikasikan resep kreasi dari bahan sisa untuk menginspirasi pengguna lain.  
-**Model Dasar:** Menyimpan judul resep, deskripsi, daftar bahan sisa, langkah-langkah, dan relasi ke pembuat (Author).  
+**Deskripsi:** Ruang berbagi (*feed*) tempat pengguna mempublikasikan resep kreasi dari bahan sisa untuk menginspirasi pengguna lain.
+**Model Dasar:** Menyimpan judul resep, deskripsi, daftar bahan sisa, langkah-langkah, dan relasi ke pembuat (*author*).
 **Fitur CRUD:**
 
 - **Create:** Menambahkan dan mempublikasikan resep kreasi sendiri.
-- **Read:** Menjelajahi resep-resep yang dibagikan oleh pengguna lain dalam bentuk linimasa (feed).
-- **Update:** Mengedit detail resep (judul, bahan, cara masak) yang telah dibuat sendiri.
-- **Delete:** Menghapus resep pribadi dari feed komunitas.
+- **Read:** Menjelajahi resep yang dibagikan pengguna lain dalam bentuk linimasa (*feed*).
+- **Update:** Mengedit detail resep (judul, bahan, cara masak) yang dibuat sendiri.
+- **Delete:** Menghapus resep pribadi dari *feed* komunitas.
 
-### 4. Food Rescue Request Board — Sandy
+### 4. Food Rescue Request Board: Reshandy Taftazani Aulya
 
-**Deskripsi:** Papan interaktif bergaya forum bagi komunitas lokal untuk meminta sisa bahan makanan dalam jumlah kecil agar tidak perlu membeli baru.  
-**Model Dasar:** Menyimpan detail permintaan bahan, relasi peminta, dan status pemenuhan (Pending, Terpenuhi).  
+**Deskripsi:** Papan interaktif bergaya forum bagi komunitas lokal untuk meminta sisa bahan makanan dalam jumlah kecil agar tidak perlu membeli baru.
+**Model Dasar:** Menyimpan detail permintaan bahan, relasi peminta, dan status pemenuhan (Pending, Terpenuhi).
 **Fitur CRUD:**
 
-- **Create:** Memposting permintaan/kebutuhan sisa bahan makanan spesifik.
-- **Read:** Menampilkan papan board berisi daftar pencarian bahan makanan dari pengguna lain.
-- **Update:** Interaksi mengubah status; pengguna lain merespons dengan menekan tombol "Saya Punya!", dan pembuat post dapat mengubah status menjadi "Terpenuhi".
-- **Delete:** Menghapus posting permintaan jika sudah tidak butuh atau sudah dibeli sendiri.
+- **Create:** Memposting permintaan sisa bahan makanan yang spesifik.
+- **Read:** Menampilkan papan berisi daftar permintaan bahan makanan dari pengguna lain.
+- **Update:** Pengguna lain merespons dengan menekan tombol "Saya Punya!", dan pembuat post dapat mengubah status menjadi "Terpenuhi".
+- **Delete:** Menghapus posting permintaan jika sudah tidak dibutuhkan atau sudah dibeli sendiri.
 
-### 5. Jurnal Jejak Makanan — Geo
+### 5. Jurnal Jejak Makanan: Georgius Satria Adibrata
 
-**Deskripsi:** Modul rekam jejak pribadi (tracker) untuk menghitung dan mengevaluasi persentase makanan yang berhasil diselamatkan atau terbuang.  
-**Model Dasar:** Menyimpan log harian berupa nama makanan, status konsumsi (Terselamatkan/Terbuang), dan catatan riwayat makanan.  
+**Deskripsi:** Modul rekam jejak pribadi (*tracker*) untuk menghitung dan mengevaluasi persentase makanan yang berhasil diselamatkan atau terbuang.
+**Model Dasar:** Menyimpan log harian berupa nama makanan, status konsumsi (Terselamatkan/Terbuang), dan catatan riwayat makanan.
 **Fitur CRUD:**
 
 - **Create:** Mencatat log riwayat makanan harian beserta status akhirnya.
-- **Read:** Menampilkan log riwayat secara kronologis serta ringkasan persentase keberhasilan (success rate).
+- **Read:** Menampilkan log riwayat secara kronologis serta ringkasan persentase keberhasilan (*success rate*).
 - **Update:** Mengedit catatan atau memperbaiki input status dan jumlah yang salah.
 - **Delete:** Menghapus baris catatan riwayat dari jurnal.
 
+## 🔌 Daftar Endpoint Django REST Framework
+
+Base URL: `https://reshandy-taftazani-savebite.pws.cs.ui.ac.id`
+
+> **Catatan untuk tim:** path di bawah hanyalah contoh pola. Sesuaikan dengan endpoint yang benar-benar sudah berjalan di proyek Django sebelum mengumpulkan.
+
+| Modul | Method | Endpoint | Fungsi |
+| ----- | ----- | ----- | ----- |
+| Autentikasi | POST | `/api/auth/login/` | Login pengguna |
+| Autentikasi | POST | `/api/auth/register/` | Registrasi pengguna |
+| Autentikasi | POST | `/api/auth/logout/` | Logout pengguna |
+| 1. Katalog Resep | GET / POST | `/api/bookmarks/` | Daftar dan tambah *bookmark* |
+| 1. Katalog Resep | PUT / DELETE | `/api/bookmarks/<id>/` | Ubah catatan dan hapus *bookmark* |
+| 2. Food Rescue Planner | GET / POST | `/api/rescue-plans/` | Daftar dan tambah *rescue plan* |
+| 2. Food Rescue Planner | PUT / DELETE | `/api/rescue-plans/<id>/` | Ubah dan hapus *rescue plan* |
+| 3. Resep Komunitas | GET / POST | `/api/community-recipes/` | Daftar dan tambah resep komunitas |
+| 3. Resep Komunitas | PUT / DELETE | `/api/community-recipes/<id>/` | Ubah dan hapus resep |
+| 4. Request Board | GET / POST | `/api/requests/` | Daftar dan tambah permintaan |
+| 4. Request Board | PUT / DELETE | `/api/requests/<id>/` | Ubah status dan hapus permintaan |
+| 5. Jurnal Jejak Makanan | GET / POST | `/api/journal/` | Daftar dan tambah log makanan |
+| 5. Jurnal Jejak Makanan | PUT / DELETE | `/api/journal/<id>/` | Ubah dan hapus log makanan |
+
 ## 🔗 Alur Integrasi Data (Flutter & Django REST Framework)
 
-- **Pusat Data di Web Django (PWS):** Seluruh data aplikasi (akun pengguna, *bookmark* resep, *rescue plan*, resep komunitas, *request board*, dan jurnal) tetap tersimpan di database situs web Django SaveBite yang telah di-*deploy* di PWS.
-- **Web Service (Django REST Framework):** Situs web Django menyediakan *endpoint* API menggunakan **Django REST Framework** (*serializer* dan *view/viewset*) untuk mengonversi data dari database menjadi format **JSON** serta memproses permintaan autentikasi dan manipulasi data.
-- **Komunikasi Asinkron di Flutter:** Aplikasi *mobile* Flutter mengirimkan permintaan HTTP secara asinkron (menggunakan *package* seperti `pbp_django_auth` / `http`) ke *endpoint* API Django untuk mengambil, menambah, mengubah, maupun menghapus data.
-- **Penyajian UI:** Respons JSON yang diterima oleh Flutter di-parsing ke dalam model Dart dan ditampilkan secara dinamis pada masing-masing halaman modul.
+1. **Pusat data di web Django (PWS):** Seluruh data aplikasi (akun pengguna, *bookmark* resep, *rescue plan*, resep komunitas, *request board*, dan jurnal) tersimpan di database situs web Django SaveBite yang sudah di-*deploy* di PWS. Aplikasi Flutter tidak menyimpan data statis; semua data berasal dari server.
+2. **Web service (Django REST Framework):** Situs web Django menyediakan endpoint API menggunakan **Django REST Framework** (*serializer* dan *view/viewset*) untuk mengonversi data dari database menjadi format **JSON** serta memproses permintaan autentikasi dan manipulasi data.
+3. **Komunikasi asinkron di Flutter:** Aplikasi Flutter mengirim permintaan HTTP secara asinkron (menggunakan package seperti `pbp_django_auth` dan `http`) ke endpoint API Django untuk mengambil, menambah, mengubah, maupun menghapus data. Sesi login dikelola melalui cookie yang dikirim bersama setiap permintaan.
+4. **Penyajian UI:** Respons JSON yang diterima Flutter di-*parsing* ke dalam model Dart dan ditampilkan secara dinamis pada halaman masing-masing modul. Perubahan data di situs web akan terlihat di aplikasi, begitu pula sebaliknya.
