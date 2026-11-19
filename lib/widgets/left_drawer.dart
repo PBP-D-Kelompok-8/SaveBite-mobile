@@ -3,6 +3,7 @@ import 'package:savebite_mobile/jurnal_makanan/jurnal_page.dart';
 import 'package:savebite_mobile/main.dart';
 import 'package:savebite_mobile/request_board/screens/request_board_page.dart';
 import 'package:savebite_mobile/food_rescue_planner/screens/food_rescue_plan_page.dart';
+import 'package:savebite_mobile/resep_komunitas/screens/resep_komunitas_page.dart';
 
 class LeftDrawer extends StatelessWidget {
   const LeftDrawer({super.key});
@@ -88,6 +89,20 @@ class LeftDrawer extends StatelessWidget {
               );
             },
           ),
+
+          // Menu untuk Resep Komunitas
+          ListTile(
+            leading: const Icon(Icons.menu_book_rounded),
+            title: const Text('Resep Komunitas'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const ResepKomunitasPage()),
+              );
+            },
+          ),
+
         ],
       ),
     );
