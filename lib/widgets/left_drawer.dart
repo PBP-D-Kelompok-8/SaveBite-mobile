@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:savebite_mobile/jurnal_makanan/jurnal_page.dart';
 import 'package:savebite_mobile/main.dart';
 import 'package:savebite_mobile/request_board/screens/request_board_page.dart';
+import 'package:savebite_mobile/food_rescue_planner/screens/food_rescue_plan_page.dart';
 
 class LeftDrawer extends StatelessWidget {
   const LeftDrawer({super.key});
@@ -71,6 +72,19 @@ class LeftDrawer extends StatelessWidget {
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (_) => const JurnalPage()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.restaurant_menu_rounded),
+            title: const Text('Food Rescue Planner'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const FoodRescuePlanPage(),
+                ),
               );
             },
           ),
