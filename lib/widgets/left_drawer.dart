@@ -4,6 +4,7 @@ import 'package:savebite_mobile/main.dart';
 import 'package:savebite_mobile/request_board/screens/request_board_page.dart';
 import 'package:savebite_mobile/food_rescue_planner/screens/food_rescue_plan_page.dart';
 import 'package:savebite_mobile/resep_komunitas/screens/resep_komunitas_page.dart';
+import 'package:savebite_mobile/katalog/screens/katalog_page.dart';
 
 class LeftDrawer extends StatelessWidget {
   const LeftDrawer({super.key});
@@ -51,6 +52,17 @@ class LeftDrawer extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (_) => const MyHomePage(title: 'SaveBite'),
                 ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.restaurant_rounded),
+            title: const Text('Katalog Resep Bahan Sisa'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const KatalogPage()),
               );
             },
           ),
