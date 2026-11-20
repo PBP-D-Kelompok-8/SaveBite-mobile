@@ -111,7 +111,6 @@ Setiap modul dikerjakan oleh satu anggota dan terdiri dari halaman-halaman Flutt
 
 Base URL: `https://reshandy-taftazani-savebite.pws.cs.ui.ac.id`
 
-> **Catatan untuk tim:** path di bawah hanyalah contoh pola. Sesuaikan dengan endpoint yang benar-benar sudah berjalan di proyek Django sebelum mengumpulkan.
 
 | Modul | Method | Endpoint | Fungsi |
 | ----- | ----- | ----- | ----- |
@@ -126,8 +125,9 @@ Base URL: `https://reshandy-taftazani-savebite.pws.cs.ui.ac.id`
 | 3. Resep Komunitas | PUT / DELETE | `/api/community-recipes/<id>/` | Ubah dan hapus resep |
 | 4. Request Board | GET / POST | `/api/requests/` | Daftar dan tambah permintaan |
 | 4. Request Board | PUT / DELETE | `/api/requests/<id>/` | Ubah status dan hapus permintaan |
-| 5. Jurnal Jejak Makanan | GET / POST | `/api/journal/` | Daftar dan tambah log makanan |
-| 5. Jurnal Jejak Makanan | PUT / DELETE | `/api/journal/<id>/` | Ubah dan hapus log makanan |
+| 5. Jurnal Jejak Makanan | GET / POST | `/jurnal/api/v1/food-logs/` | Daftar log makanan milik pengguna (filter query, status, date_from, date_to, page) dan tambah log makanan |
+| 5. Jurnal Jejak Makanan | GET / PUT / PATCH / DELETE | `/jurnal/api/v1/food-logs/<id>/` | Detail, ubah (penuh/sebagian), dan hapus log makanan |
+| 5. Jurnal Jejak Makanan | GET | `/jurnal/api/v1/food-logs/summary/` | Ringkasan jumlah dan persentase makanan terselamatkan/terbuang |
 
 ## 🔗 Alur Integrasi Data (Flutter & Django REST Framework)
 
