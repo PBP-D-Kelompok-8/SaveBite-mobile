@@ -88,7 +88,7 @@ Setiap modul dikerjakan oleh satu anggota dan terdiri dari halaman-halaman Flutt
 ### 4. Food Rescue Request Board: Reshandy Taftazani Aulya
 
 **Deskripsi:** Papan interaktif bergaya forum bagi komunitas lokal untuk meminta sisa bahan makanan dalam jumlah kecil agar tidak perlu membeli baru.
-**Model Dasar:** Menyimpan detail permintaan bahan, relasi peminta, dan status pemenuhan (Pending, Terpenuhi).
+**Model Dasar:** Menyimpan detail permintaan bahan, relasi peminta, dan status pemenuhan (status tersimpan: Pending, Ditawarkan, Terpenuhi; status efektif tambahan: Kedaluwarsa).
 **Fitur CRUD:**
 
 - **Create:** Memposting permintaan sisa bahan makanan yang spesifik.
