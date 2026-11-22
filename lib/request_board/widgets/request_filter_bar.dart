@@ -119,55 +119,48 @@ class _RequestFilterBarState extends State<RequestFilterBar> {
           ),
         ),
         const SizedBox(height: 10),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              ChoiceChip(
-                label: const Text('Semua'),
-                selected: widget.selectedStatus == null,
-                onSelected: (_) => widget.onStatusChanged(null),
-              ),
-              ...filterStatusChoices.map((status) {
-                return Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: ChoiceChip(
-                    label: Text(requestStatusLabel(status)),
-                    selected: widget.selectedStatus == status,
-                    onSelected: (selected) {
-                      widget.onStatusChanged(selected ? status : null);
-                    },
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          alignment: WrapAlignment.spaceBetween,
+        Row(
           children: [
-            FilterChip(
-              avatar: Icon(
-                Icons.person_outline,
-                size: 18,
-                color: widget.isAuthenticated
-                    ? null
-                    : colorScheme.onSurface.withValues(alpha: 0.38),
+            Expanded(
+              child: DropdownButtonFormField<String?>(
+                initialValue: filterStatusChoices.contains(widget.selectedStatus)
+                    ? widget.selectedStatus
+                    : null,
+                isExpanded: true,
+                isDense: true,
+                decoration: InputDecoration(
+                  labelText: 'Status',
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                style: textTheme.bodyMedium,
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua'),
+                  ),
+                  ...filterStatusChoices.map((status) {
+                    return DropdownMenuItem<String?>(
+                      value: status,
+                      child: Text(requestStatusLabel(status)),
+                    );
+                  }),
+                ],
+                onChanged: widget.onStatusChanged,
               ),
-              label: const Text('Permintaan Saya'),
-              selected: widget.isAuthenticated && widget.mineOnly,
-              onSelected: widget.isAuthenticated ? widget.onMineChanged : null,
             ),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 160),
+            const SizedBox(width: 8),
+            Expanded(
               child: DropdownButtonFormField<String>(
                 initialValue: sortChoices.contains(widget.selectedSort)
                     ? widget.selectedSort
                     : sortChoices.first,
+                isExpanded: true,
                 isDense: true,
                 decoration: InputDecoration(
                   labelText: 'Urutkan',
@@ -194,6 +187,19 @@ class _RequestFilterBarState extends State<RequestFilterBar> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 8),
+        FilterChip(
+          avatar: Icon(
+            Icons.person_outline,
+            size: 18,
+            color: widget.isAuthenticated
+                ? null
+                : colorScheme.onSurface.withValues(alpha: 0.38),
+          ),
+          label: const Text('Permintaan Saya'),
+          selected: widget.isAuthenticated && widget.mineOnly,
+          onSelected: widget.isAuthenticated ? widget.onMineChanged : null,
         ),
       ],
     );
