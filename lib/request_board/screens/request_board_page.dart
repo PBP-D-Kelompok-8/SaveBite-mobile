@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:savebite_mobile/request_board/data/dummy_requests.dart';
 import 'package:savebite_mobile/request_board/models/food_request.dart';
+import 'package:savebite_mobile/request_board/screens/request_detail_page.dart';
+import 'package:savebite_mobile/request_board/screens/request_form_page.dart';
 import 'package:savebite_mobile/request_board/widgets/request_card.dart';
 import 'package:savebite_mobile/request_board/widgets/request_filter_bar.dart';
 import 'package:savebite_mobile/widgets/left_drawer.dart';
@@ -23,6 +25,7 @@ class RequestBoardPage extends StatefulWidget {
 }
 
 class _RequestBoardPageState extends State<RequestBoardPage> {
+  late List<FoodRequest> _requests;
   String _query = '';
   String? _selectedStatus;
   bool _mineOnly = false;
@@ -32,12 +35,20 @@ class _RequestBoardPageState extends State<RequestBoardPage> {
   @override
   void initState() {
     super.initState();
+    _requests = List<FoodRequest>.from(
+      widget.initialRequests ?? dummyFoodRequests,
+    );
     _isLoading = widget.isLoading;
   }
 
   @override
   void didUpdateWidget(covariant RequestBoardPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.initialRequests != oldWidget.initialRequests) {
+      _requests = List<FoodRequest>.from(
+        widget.initialRequests ?? dummyFoodRequests,
+      );
+    }
     if (widget.isLoading != oldWidget.isLoading) {
       _isLoading = widget.isLoading;
     }
@@ -47,10 +58,9 @@ class _RequestBoardPageState extends State<RequestBoardPage> {
   }
 
   List<FoodRequest> get _filteredRequests {
-    final source = widget.initialRequests ?? dummyFoodRequests;
     final normalizedQuery = _query.trim().toLowerCase();
 
-    final filtered = source.where((request) {
+    final filtered = _requests.where((request) {
       if (_mineOnly && widget.currentUserId != null) {
         if (request.owner.id != widget.currentUserId) return false;
       }
@@ -94,7 +104,79 @@ class _RequestBoardPageState extends State<RequestBoardPage> {
     });
   }
 
-  void _showComingSoon(String message) {
+  PageRouteBuilder<T> _buildSmoothRoute<T>(Widget page) {
+    return PageRouteBuilder<T>(
+      transitionDuration: const Duration(milliseconds: 240),
+      reverseTransitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.04),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openRequestDetail(FoodRequest request) async {
+    final result = await Navigator.of(context).push<RequestDetailResult>(
+      _buildSmoothRoute(
+        RequestDetailPage(
+          request: request,
+          currentUserId: widget.currentUserId,
+        ),
+      ),
+    );
+
+    if (!mounted || result == null) return;
+
+    if (result.deletedRequestId != null) {
+      setState(() {
+        _requests.removeWhere((item) => item.id == result.deletedRequestId);
+      });
+      _showSnackBar('Permintaan berhasil dihapus.');
+    } else if (result.updatedRequest != null) {
+      final updated = result.updatedRequest!;
+      setState(() {
+        final idx = _requests.indexWhere((item) => item.id == updated.id);
+        if (idx != -1) {
+          _requests[idx] = updated;
+        }
+      });
+    }
+  }
+
+  Future<void> _openCreateForm() async {
+    if (widget.currentUserId == null) {
+      _showSnackBar('Silakan masuk terlebih dahulu untuk membuat permintaan.');
+      return;
+    }
+
+    final created = await Navigator.of(context).push<FoodRequest>(
+      _buildSmoothRoute(
+        RequestFormPage(currentUserId: widget.currentUserId),
+      ),
+    );
+
+    if (!mounted || created == null) return;
+
+    setState(() {
+      _requests.insert(0, created);
+    });
+    _showSnackBar('Permintaan "${created.title}" berhasil dibuat.');
+  }
+
+  void _showSnackBar(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -113,8 +195,7 @@ class _RequestBoardPageState extends State<RequestBoardPage> {
       drawer: const LeftDrawer(),
       floatingActionButton: FloatingActionButton(
         tooltip: 'Buat Permintaan Baru',
-        onPressed: () =>
-            _showComingSoon('Form buat permintaan akan tersedia di Tahap 3.'),
+        onPressed: _openCreateForm,
         child: const Icon(Icons.add),
       ),
       body: Column(
@@ -181,9 +262,7 @@ class _RequestBoardPageState extends State<RequestBoardPage> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: RequestCard(
                   request: request,
-                  onTap: () => _showComingSoon(
-                    'Halaman detail "${request.title}" akan tersedia di Tahap 3.',
-                  ),
+                  onTap: () => _openRequestDetail(request),
                 ),
               );
             },
@@ -203,9 +282,7 @@ class _RequestBoardPageState extends State<RequestBoardPage> {
             final request = requests[index];
             return RequestCard(
               request: request,
-              onTap: () => _showComingSoon(
-                'Halaman detail "${request.title}" akan tersedia di Tahap 3.',
-              ),
+              onTap: () => _openRequestDetail(request),
             );
           },
         );

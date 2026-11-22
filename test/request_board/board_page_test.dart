@@ -143,4 +143,74 @@ void main() {
     );
     expect(chip.onSelected, isNull);
   });
+
+  testWidgets('Tapping RequestCard opens RequestDetailPage and syncs delete', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_buildTestApp(size: const Size(400, 900)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Butuh Beras Putih untuk Dapur Umum'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detail Permintaan'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Hapus Request'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Hapus'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Food Rescue Request Board'), findsOneWidget);
+    expect(find.text('Butuh Beras Putih untuk Dapur Umum'), findsNothing);
+  });
+
+  testWidgets('Tapping FAB opens RequestFormPage and adds created request', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_buildTestApp(size: const Size(400, 900)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Buat Permintaan Baru'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Judul Permintaan *'),
+      'Butuh Gula Pasir',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Nama Bahan Makanan *'),
+      'Gula Pasir',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Jumlah *'),
+      '3',
+    );
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('kg').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lanjut').first);
+    await tester.pumpAndSettle();
+
+    final submitBtn = find.text('Kirim Permintaan');
+    await tester.ensureVisible(submitBtn);
+    await tester.tap(submitBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Food Rescue Request Board'), findsOneWidget);
+    expect(find.text('Butuh Gula Pasir'), findsOneWidget);
+  });
 }
