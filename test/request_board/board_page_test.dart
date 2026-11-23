@@ -1,11 +1,84 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:savebite_mobile/request_board/data/dummy_requests.dart';
+import 'package:savebite_mobile/request_board/models/food_request.dart';
+import 'package:savebite_mobile/request_board/providers/request_board_provider.dart';
 import 'package:savebite_mobile/request_board/screens/request_board_page.dart';
+import 'package:savebite_mobile/request_board/services/request_board_service.dart';
+import 'package:savebite_mobile/request_board/services/session_client.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+RequestBoardService _createInMemoryService({
+  int? currentUserId = 1,
+}) {
+  final sessionClient = SaveBiteSessionClient(
+    baseUrl: 'https://example.test',
+    httpClient: MockClient((request) async {
+      final params = request.url.queryParameters;
+      final q = (params['q'] ?? '').trim().toLowerCase();
+      final status = params['status'];
+      final mine = params['mine'] == 'true';
+      final sort = params['sort'] ?? 'newest';
+
+      final filtered = dummyFoodRequests.where((item) {
+        if (mine && currentUserId != null && item.owner.id != currentUserId) {
+          return false;
+        }
+        if (status != null &&
+            status.isNotEmpty &&
+            item.effectiveStatus != status) {
+          return false;
+        }
+        if (q.isNotEmpty) {
+          final matches = item.title.toLowerCase().contains(q) ||
+              item.foodItem.toLowerCase().contains(q) ||
+              item.location.toLowerCase().contains(q);
+          if (!matches) return false;
+        }
+        return true;
+      }).toList();
+
+      filtered.sort((a, b) => sort == 'oldest'
+          ? a.createdAt.compareTo(b.createdAt)
+          : b.createdAt.compareTo(a.createdAt));
+
+      return http.Response(
+        jsonEncode({
+          'count': filtered.length,
+          'page': 1,
+          'page_size': 20,
+          'total_pages': 1,
+          'results': filtered.map((e) => e.toCacheJson()).toList(),
+        }),
+        200,
+      );
+    }),
+  );
+
+  if (currentUserId != null) {
+    sessionClient.setSession(
+      sessionId: 'test-session',
+      csrfToken: 'test-csrf',
+      userId: currentUserId,
+      username: 'Dapur Komunitas Menteng',
+    );
+  }
+
+  return RequestBoardService(sessionClient: sessionClient);
+}
 
 Widget _buildTestApp({
   Size size = const Size(360, 800),
   int? currentUserId = 1,
 }) {
+  SharedPreferences.setMockInitialValues({});
+  final service = _createInMemoryService(currentUserId: currentUserId);
+  final provider = RequestBoardProvider(service: service);
+
   return MaterialApp(
     theme: ThemeData(
       colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
@@ -13,7 +86,7 @@ Widget _buildTestApp({
     ),
     home: MediaQuery(
       data: MediaQueryData(size: size),
-      child: RequestBoardPage(currentUserId: currentUserId),
+      child: RequestBoardPage(provider: provider),
     ),
   );
 }
@@ -31,12 +104,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ListView), findsOneWidget);
-    expect(find.byType(GridView), findsNothing);
+    expect(find.byType(SliverGrid), findsNothing);
     expect(find.text('Butuh Beras Putih untuk Dapur Umum'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Tablet layout (>= 600px) uses 2-column GridView without overflow', (
+  testWidgets('Tablet layout (>= 600px) uses 2-column grid without overflow', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(800, 1000);
@@ -47,7 +120,7 @@ void main() {
     await tester.pumpWidget(_buildTestApp(size: const Size(800, 1000)));
     await tester.pumpAndSettle();
 
-    expect(find.byType(GridView), findsOneWidget);
+    expect(find.byType(SliverGrid), findsOneWidget);
     expect(find.byType(ListView), findsNothing);
     expect(find.text('Butuh Beras Putih untuk Dapur Umum'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -212,5 +285,59 @@ void main() {
 
     expect(find.text('Food Rescue Request Board'), findsOneWidget);
     expect(find.text('Butuh Gula Pasir'), findsOneWidget);
+  });
+
+  testWidgets('Offline fallback shows cached items and offline banner', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    SharedPreferences.setMockInitialValues({
+      RequestBoardProvider.publicPage1CacheKey: jsonEncode([
+        FoodRequest(
+          id: 501,
+          owner: const RequestOwner(id: 2, displayName: 'Warga Tebet'),
+          title: 'Cached Offline Request',
+          foodItem: 'Wortel',
+          quantity: '1.00',
+          unit: 'kg',
+          description: '',
+          location: 'Tebet',
+          status: 'pending',
+          effectiveStatus: 'pending',
+          offerCount: 0,
+          hasOffered: false,
+          createdAt: DateTime.utc(2026, 11, 20),
+          updatedAt: DateTime.utc(2026, 11, 20),
+        ).toCacheJson(),
+      ]),
+    });
+
+    final sessionClient = SaveBiteSessionClient(
+      baseUrl: 'https://example.test',
+      httpClient: MockClient((_) async {
+        throw http.ClientException('Offline');
+      }),
+    );
+    final provider = RequestBoardProvider(
+      service: RequestBoardService(sessionClient: sessionClient),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RequestBoardPage(provider: provider),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Mode Offline — menampilkan data terakhir tersimpan'),
+      findsOneWidget,
+    );
+    expect(find.text('Coba Lagi'), findsOneWidget);
+    expect(find.text('Cached Offline Request'), findsOneWidget);
   });
 }
