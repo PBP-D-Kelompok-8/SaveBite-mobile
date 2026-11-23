@@ -15,47 +15,124 @@ import 'package:shared_preferences/shared_preferences.dart';
 RequestBoardService _createInMemoryService({
   int? currentUserId = 1,
 }) {
+  final store = List<FoodRequest>.from(dummyFoodRequests);
+  var nextId = 1000;
+
   final sessionClient = SaveBiteSessionClient(
     baseUrl: 'https://example.test',
     httpClient: MockClient((request) async {
-      final params = request.url.queryParameters;
-      final q = (params['q'] ?? '').trim().toLowerCase();
-      final status = params['status'];
-      final mine = params['mine'] == 'true';
-      final sort = params['sort'] ?? 'newest';
+      final path = request.url.path;
 
-      final filtered = dummyFoodRequests.where((item) {
-        if (mine && currentUserId != null && item.owner.id != currentUserId) {
-          return false;
-        }
-        if (status != null &&
-            status.isNotEmpty &&
-            item.effectiveStatus != status) {
-          return false;
-        }
-        if (q.isNotEmpty) {
-          final matches = item.title.toLowerCase().contains(q) ||
-              item.foodItem.toLowerCase().contains(q) ||
-              item.location.toLowerCase().contains(q);
-          if (!matches) return false;
-        }
-        return true;
-      }).toList();
+      if (request.method == 'GET' && path == '/api/v1/requests/') {
+        final params = request.url.queryParameters;
+        final q = (params['q'] ?? '').trim().toLowerCase();
+        final status = params['status'];
+        final mine = params['mine'] == 'true';
+        final sort = params['sort'] ?? 'newest';
 
-      filtered.sort((a, b) => sort == 'oldest'
-          ? a.createdAt.compareTo(b.createdAt)
-          : b.createdAt.compareTo(a.createdAt));
+        final filtered = store.where((item) {
+          if (mine && currentUserId != null && item.owner.id != currentUserId) {
+            return false;
+          }
+          if (status != null &&
+              status.isNotEmpty &&
+              item.effectiveStatus != status) {
+            return false;
+          }
+          if (q.isNotEmpty) {
+            final matches = item.title.toLowerCase().contains(q) ||
+                item.foodItem.toLowerCase().contains(q) ||
+                item.location.toLowerCase().contains(q);
+            if (!matches) return false;
+          }
+          return true;
+        }).toList();
 
-      return http.Response(
-        jsonEncode({
-          'count': filtered.length,
-          'page': 1,
-          'page_size': 20,
-          'total_pages': 1,
-          'results': filtered.map((e) => e.toCacheJson()).toList(),
-        }),
-        200,
-      );
+        filtered.sort((a, b) => sort == 'oldest'
+            ? a.createdAt.compareTo(b.createdAt)
+            : b.createdAt.compareTo(a.createdAt));
+
+        return http.Response(
+          jsonEncode({
+            'count': filtered.length,
+            'page': 1,
+            'page_size': 20,
+            'total_pages': 1,
+            'results': filtered.map((e) => e.toCacheJson()).toList(),
+          }),
+          200,
+        );
+      }
+
+      if (request.method == 'POST' && path == '/api/v1/requests/') {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final now = DateTime.now().toUtc();
+        final created = FoodRequest(
+          id: nextId++,
+          owner: RequestOwner(
+            id: currentUserId ?? 1,
+            displayName: 'Dapur Komunitas Menteng',
+          ),
+          title: body['title'] as String,
+          foodItem: body['food_item'] as String,
+          quantity: body['quantity'].toString(),
+          unit: body['unit'] as String,
+          description: body['description'] as String? ?? '',
+          location: body['location'] as String? ?? '',
+          status: 'pending',
+          effectiveStatus: 'pending',
+          expiresAt: body['expires_at'] != null
+              ? DateTime.parse(body['expires_at'] as String)
+              : now.add(const Duration(hours: 24)),
+          offerCount: 0,
+          hasOffered: false,
+          selectedOfferId: null,
+          createdAt: now,
+          updatedAt: now,
+        );
+        store.insert(0, created);
+        return http.Response(jsonEncode(created.toCacheJson()), 201);
+      }
+
+      final detailMatch = RegExp(r'^/api/v1/requests/(\d+)/$').firstMatch(path);
+      if (detailMatch != null) {
+        final id = int.parse(detailMatch.group(1)!);
+        if (request.method == 'GET') {
+          final item = store.firstWhere((e) => e.id == id);
+          return http.Response(jsonEncode(item.toCacheJson()), 200);
+        }
+        if (request.method == 'DELETE') {
+          store.removeWhere((e) => e.id == id);
+          return http.Response('', 204);
+        }
+      }
+
+      final offersMatch =
+          RegExp(r'^/api/v1/requests/(\d+)/offers/$').firstMatch(path);
+      if (offersMatch != null && request.method == 'GET') {
+        final id = int.parse(offersMatch.group(1)!);
+        final offers = getDummyOffersForRequest(id);
+        return http.Response(
+          jsonEncode({
+            'count': offers.length,
+            'page': 1,
+            'page_size': 20,
+            'total_pages': 1,
+            'results': offers
+                .map((o) => {
+                      'id': o.id,
+                      'request_id': o.requestId,
+                      'offered_by': o.offeredBy.toJson(),
+                      'created_at': o.createdAt.toUtc().toIso8601String(),
+                      'is_selected': o.isSelected,
+                    })
+                .toList(),
+          }),
+          200,
+        );
+      }
+
+      return http.Response(jsonEncode({'detail': 'Not found.'}), 404);
     }),
   );
 
@@ -233,7 +310,9 @@ void main() {
 
     expect(find.text('Detail Permintaan'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Hapus Request'));
+    final deleteBtn = find.widgetWithText(OutlinedButton, 'Hapus Request');
+    await tester.ensureVisible(deleteBtn);
+    await tester.tap(deleteBtn);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Hapus'));
     await tester.pumpAndSettle();

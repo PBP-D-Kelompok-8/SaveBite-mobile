@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:savebite_mobile/request_board/data/dummy_requests.dart';
 import 'package:savebite_mobile/request_board/models/food_request.dart';
+import 'package:savebite_mobile/request_board/services/idempotency_draft_store.dart';
+import 'package:savebite_mobile/request_board/services/request_board_service.dart';
+import 'package:savebite_mobile/request_board/services/session_client.dart';
 
 /// Exception untuk error validasi per field dari server (`400 Bad Request`).
 class RequestFormValidationException implements Exception {
@@ -24,9 +27,18 @@ class RequestFormPage extends StatefulWidget {
   final String currentUserDisplayName;
 
   /// Callback opsional untuk integrasi API di Tahap 4.
-  /// Jika null, form mengembalikan [FoodRequest] lokal untuk pratinjau UI.
+  /// Jika null dan [service] juga null, form mengembalikan [FoodRequest] lokal.
   final Future<FoodRequest?> Function(FoodRequestCreatePayload payload)?
       onSubmit;
+
+  /// Service REST API untuk submit form dengan idempotensi `Idempotency-Key`.
+  final RequestBoardService? service;
+
+  /// Penyimpanan draf idempoten lintas sesi (opsional untuk pengujian).
+  final PendingRequestDraftStore? draftStore;
+
+  /// Opsional untuk pengujian atau injeksi generator UUID v4.
+  final String Function()? idempotencyKeyGenerator;
 
   /// Opsional untuk pengujian atau injeksi waktu sekarang.
   final DateTime Function()? nowProvider;
@@ -36,6 +48,9 @@ class RequestFormPage extends StatefulWidget {
     this.currentUserId = dummyCurrentUserId,
     this.currentUserDisplayName = 'Dapur Komunitas Menteng',
     this.onSubmit,
+    this.service,
+    this.draftStore,
+    this.idempotencyKeyGenerator,
     this.nowProvider,
   });
 
@@ -61,7 +76,56 @@ class _RequestFormPageState extends State<RequestFormPage> {
   String? _generalError;
   bool _isSubmitting = false;
 
+  late String _idempotencyKey;
+  FoodRequestCreatePayload? _lockedPayload;
+  PendingRequestDraftStore? _draftStore;
+
   DateTime get _now => (widget.nowProvider ?? DateTime.now)();
+
+  String _nextUuid() =>
+      (widget.idempotencyKeyGenerator ?? generateUuidV4)();
+
+  @override
+  void initState() {
+    super.initState();
+    _idempotencyKey = _nextUuid();
+    if (widget.service != null) {
+      _draftStore = widget.draftStore ?? PendingRequestDraftStore();
+      _restorePendingDraft();
+    }
+  }
+
+  Future<void> _restorePendingDraft() async {
+    final accountId =
+        widget.currentUserId ?? widget.service?.sessionClient.currentUserId;
+    if (accountId == null || _draftStore == null) return;
+
+    final draft = await _draftStore!.loadForAccount(accountId, now: _now);
+    if (!mounted || draft == null) return;
+
+    final restoredPayload = draft.toPayload();
+    setState(() {
+      _idempotencyKey = draft.idempotencyKey;
+      _lockedPayload = restoredPayload;
+      if (_titleController.text.isEmpty) {
+        _titleController.text = restoredPayload.title;
+      }
+      if (_foodItemController.text.isEmpty) {
+        _foodItemController.text = restoredPayload.foodItem;
+      }
+      if (_quantityController.text.isEmpty) {
+        _quantityController.text = restoredPayload.quantity;
+      }
+      _selectedUnit ??= restoredPayload.unit;
+      if (_locationController.text.isEmpty) {
+        _locationController.text = restoredPayload.location;
+      }
+      if (_descriptionController.text.isEmpty) {
+        _descriptionController.text = restoredPayload.description;
+      }
+      _expiresAt ??= restoredPayload.expiresAt;
+    });
+  }
 
   @override
   void dispose() {
@@ -238,6 +302,8 @@ class _RequestFormPageState extends State<RequestFormPage> {
         final created = await widget.onSubmit!(payload);
         if (!mounted) return;
         Navigator.of(context).pop(created);
+      } else if (widget.service != null) {
+        await _submitViaService(payload);
       } else {
         final nowUtc = _now.toUtc();
         final localCreated = FoodRequest(
@@ -286,6 +352,133 @@ class _RequestFormPageState extends State<RequestFormPage> {
     }
   }
 
+  Future<void> _submitViaService(FoodRequestCreatePayload formPayload) async {
+    final service = widget.service!;
+    final accountId =
+        widget.currentUserId ?? service.sessionClient.currentUserId;
+
+    // Pertahankan salinan payload pertama & UUID selama hasil belum pasti.
+    final payloadToSend = _lockedPayload ?? formPayload;
+    _lockedPayload ??= payloadToSend;
+
+    if (accountId != null && _draftStore != null) {
+      await _draftStore!.save(
+        PendingRequestDraft(
+          accountId: accountId,
+          idempotencyKey: _idempotencyKey,
+          payloadJson: payloadToSend.toJson(),
+          createdAt: _now.toUtc(),
+        ),
+      );
+    }
+
+    try {
+      final created = await service.createRequest(
+        payloadToSend,
+        idempotencyKey: _idempotencyKey,
+      );
+      await _draftStore?.clear();
+      if (!mounted) return;
+      Navigator.of(context).pop(created);
+    } on RequestBoardValidationException catch (e) {
+      await _draftStore?.clear();
+      _lockedPayload = null;
+      if (!mounted) return;
+      final step1Fields = {'title', 'food_item', 'quantity', 'unit'};
+      final hasStep1Error = e.fieldErrors.keys.any(step1Fields.contains);
+
+      setState(() {
+        _serverErrors = Map<String, String>.from(e.fieldErrors);
+        _generalError = e.fieldErrors.isEmpty ? e.message : null;
+        _isSubmitting = false;
+        if (hasStep1Error) {
+          _currentStep = 0;
+        }
+      });
+    } on RequestBoardForbiddenException catch (e) {
+      await _draftStore?.clear();
+      _lockedPayload = null;
+      if (!mounted) return;
+      setState(() {
+        _generalError = e.message;
+        _isSubmitting = false;
+      });
+    } on RequestBoardConflictException catch (e) {
+      await _draftStore?.clear();
+      _lockedPayload = null;
+      if (e.code == 'idempotency_conflict' || e.code == 'idempotency_deleted') {
+        _idempotencyKey = _nextUuid();
+      }
+      if (!mounted) return;
+      setState(() {
+        _generalError = e.message;
+        _isSubmitting = false;
+      });
+    } on RequestBoardNetworkException {
+      await _reconcileIdempotencyAfterNetworkError(service);
+    } on RequestBoardApiException catch (e) {
+      await _draftStore?.clear();
+      _lockedPayload = null;
+      if (!mounted) return;
+      setState(() {
+        _generalError = e.message;
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  Future<void> _reconcileIdempotencyAfterNetworkError(
+    RequestBoardService service,
+  ) async {
+    try {
+      final status = await service.fetchRequestCreationStatus(_idempotencyKey);
+      if (!mounted) return;
+
+      if (status != null && status.isCreated) {
+        FoodRequest? created;
+        if (status.requestId != null) {
+          try {
+            created = await service.fetchRequestDetail(status.requestId!);
+          } catch (_) {
+            // Tetap selesaikan alur sukses bila detail gagal dimuat ulang.
+          }
+        }
+        await _draftStore?.clear();
+        _lockedPayload = null;
+        if (!mounted) return;
+        Navigator.of(context).pop(created);
+        return;
+      }
+
+      if (status != null && status.isDeleted) {
+        await _draftStore?.clear();
+        _lockedPayload = null;
+        _idempotencyKey = _nextUuid();
+        setState(() {
+          _generalError =
+              'Permintaan dari pengajuan sebelumnya sudah dihapus. Retry dihentikan.';
+          _isSubmitting = false;
+        });
+        return;
+      }
+
+      // status == null (404): hasil masih belum pasti -> pertahankan key & payload.
+      setState(() {
+        _generalError =
+            'Hasil pengiriman belum pasti karena gangguan jaringan. Tekan "Kirim Permintaan" untuk mencoba ulang dengan data yang sama.';
+        _isSubmitting = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      // Lookup juga gagal jaringan -> pertahankan key & payload untuk retry.
+      setState(() {
+        _generalError =
+            'Koneksi terputus saat memeriksa status pengiriman. Tekan "Kirim Permintaan" untuk mencoba ulang dengan data yang sama.';
+        _isSubmitting = false;
+      });
+    }
+  }
+
   String _formatDateTime(DateTime dt) {
     final local = dt.toLocal();
     final day = local.day.toString().padLeft(2, '0');
@@ -315,6 +508,34 @@ class _RequestFormPageState extends State<RequestFormPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (_lockedPayload != null && _generalError == null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.sync_problem_outlined,
+                            color: colorScheme.onSecondaryContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Melanjutkan pengajuan sebelumnya dengan kunci idempotensi yang sama.',
+                              style: TextStyle(
+                                color: colorScheme.onSecondaryContainer,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   if (_generalError != null) ...[
                     Container(
                       padding: const EdgeInsets.all(12),

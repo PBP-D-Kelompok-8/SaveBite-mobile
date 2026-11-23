@@ -3,6 +3,7 @@ import 'package:savebite_mobile/request_board/data/dummy_requests.dart';
 import 'package:savebite_mobile/request_board/models/food_request.dart';
 import 'package:savebite_mobile/request_board/models/paginated_response.dart';
 import 'package:savebite_mobile/request_board/models/request_offer.dart';
+import 'package:savebite_mobile/request_board/services/request_board_service.dart';
 import 'package:savebite_mobile/request_board/widgets/offer_card.dart';
 import 'package:savebite_mobile/request_board/widgets/request_card.dart';
 
@@ -51,6 +52,7 @@ class RequestDetailPage extends StatefulWidget {
   final Future<FoodRequest?> Function(int requestId)? onFulfillRequest;
   final Future<bool> Function(int requestId)? onDeleteRequest;
   final VoidCallback? onNavigateToLogin;
+  final RequestBoardService? service;
 
   const RequestDetailPage({
     super.key,
@@ -65,6 +67,7 @@ class RequestDetailPage extends StatefulWidget {
     this.onFulfillRequest,
     this.onDeleteRequest,
     this.onNavigateToLogin,
+    this.service,
   });
 
   @override
@@ -85,65 +88,118 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
   /// Token generasi untuk mengabaikan respons asinkron lama saat sesi pengguna
   /// berubah (logout / ganti akun) atau `request.id` berganti.
   int _requestGeneration = 0;
+  int? _effectiveCurrentUserId;
 
-  bool get _isGuest => widget.currentUserId == null;
+  bool get _isGuest => _effectiveCurrentUserId == null;
   bool get _isOwner =>
-      widget.currentUserId != null &&
-      widget.currentUserId == _request.owner.id;
+      _effectiveCurrentUserId != null &&
+      _effectiveCurrentUserId == _request.owner.id;
 
   @override
   void initState() {
     super.initState();
     _request = widget.request;
-    _initOffersForCurrentSession();
+    _effectiveCurrentUserId =
+        widget.currentUserId ?? widget.service?.sessionClient.currentUserId;
+    widget.service?.sessionClient.addListener(_handleSessionClientChanged);
+
+    if (widget.service != null &&
+        widget.onRefreshDetail == null &&
+        widget.initialOffers == null) {
+      Future.microtask(() {
+        if (mounted) {
+          _refreshDetail();
+        }
+      });
+    } else {
+      _initOffersForCurrentSession();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.service?.sessionClient.removeListener(_handleSessionClientChanged);
+    super.dispose();
+  }
+
+  void _handleSessionClientChanged() {
+    if (!mounted || widget.service == null) return;
+    final nextUserId = widget.service!.sessionClient.currentUserId;
+    if (nextUserId == _effectiveCurrentUserId) return;
+    _applySessionOrRequestChange(
+      requestChanged: false,
+      sessionChanged: true,
+      nextUserId: nextUserId,
+    );
   }
 
   @override
   void didUpdateWidget(covariant RequestDetailPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.service != widget.service) {
+      oldWidget.service?.sessionClient
+          .removeListener(_handleSessionClientChanged);
+      widget.service?.sessionClient.addListener(_handleSessionClientChanged);
+    }
+
     final requestChanged = widget.request.id != oldWidget.request.id;
-    final sessionChanged = widget.currentUserId != oldWidget.currentUserId;
+    final nextUserId =
+        widget.currentUserId ?? widget.service?.sessionClient.currentUserId;
+    final sessionChanged = nextUserId != _effectiveCurrentUserId;
 
     if (requestChanged || sessionChanged) {
-      // Batalkan/abaikan seluruh respons dari sesi atau request sebelumnya.
-      _requestGeneration++;
-      _offers = [];
-      _offersPage = 1;
-      _hasNextOffersPage = false;
-      _isLoadingDetail = false;
-      _isLoadingOffers = false;
-      _isActionInProgress = false;
+      _applySessionOrRequestChange(
+        requestChanged: requestChanged,
+        sessionChanged: sessionChanged,
+        nextUserId: nextUserId,
+      );
+    }
+  }
 
-      if (requestChanged) {
-        _offersClosedLocally = false;
-        _request = widget.request;
-      } else if (sessionChanged && widget.currentUserId == null) {
-        // Saat logout ke mode tamu, bersihkan field privat.
-        _request = FoodRequest(
-          id: _request.id,
-          owner: _request.owner,
-          title: _request.title,
-          foodItem: _request.foodItem,
-          quantity: _request.quantity,
-          unit: _request.unit,
-          description: _request.description,
-          location: _request.location,
-          status: _request.status,
-          effectiveStatus: _request.effectiveStatus,
-          expiresAt: _request.expiresAt,
-          offerCount: _request.offerCount,
-          hasOffered: false,
-          selectedOfferId: null,
-          createdAt: _request.createdAt,
-          updatedAt: _request.updatedAt,
-        );
-      }
+  void _applySessionOrRequestChange({
+    required bool requestChanged,
+    required bool sessionChanged,
+    required int? nextUserId,
+  }) {
+    // Batalkan/abaikan seluruh respons dari sesi atau request sebelumnya.
+    _requestGeneration++;
+    _effectiveCurrentUserId = nextUserId;
+    _offers = [];
+    _offersPage = 1;
+    _hasNextOffersPage = false;
+    _isLoadingDetail = false;
+    _isLoadingOffers = false;
+    _isActionInProgress = false;
 
-      if (widget.onRefreshDetail != null) {
-        _refreshDetail();
-      } else {
-        _initOffersForCurrentSession();
-      }
+    if (requestChanged) {
+      _offersClosedLocally = false;
+      _request = widget.request;
+    } else if (sessionChanged && nextUserId == null) {
+      // Saat logout ke mode tamu, bersihkan field privat.
+      _request = FoodRequest(
+        id: _request.id,
+        owner: _request.owner,
+        title: _request.title,
+        foodItem: _request.foodItem,
+        quantity: _request.quantity,
+        unit: _request.unit,
+        description: _request.description,
+        location: _request.location,
+        status: _request.status,
+        effectiveStatus: _request.effectiveStatus,
+        expiresAt: _request.expiresAt,
+        offerCount: _request.offerCount,
+        hasOffered: false,
+        selectedOfferId: null,
+        createdAt: _request.createdAt,
+        updatedAt: _request.updatedAt,
+      );
+    }
+
+    if (widget.onRefreshDetail != null || widget.service != null) {
+      _refreshDetail();
+    } else {
+      _initOffersForCurrentSession();
     }
   }
 
@@ -159,7 +215,7 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
       _offers = List<RequestOffer>.from(widget.initialOffers!);
       _offersPage = 1;
       _hasNextOffersPage = widget.initialHasNextOffersPage;
-    } else if (widget.onLoadOffers != null) {
+    } else if (widget.onLoadOffers != null || widget.service != null) {
       _loadOffers(page: 1, replace: true);
     } else {
       _offers = getDummyOffersForRequest(_request.id);
@@ -168,8 +224,63 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
     }
   }
 
+  void _popParentDeleted([String? message]) {
+    if (!mounted) return;
+    _showSnackBar(
+      message ?? 'Permintaan ini sudah tidak tersedia atau telah dihapus.',
+    );
+    Navigator.of(context).pop(
+      RequestDetailResult(deletedRequestId: _request.id),
+    );
+  }
+
+  /// Mengecek `GET /api/v1/requests/<id>/` sekali saat menerima `404` ambigu
+  /// dari `GET /offers/` atau `PATCH /selection/`.
+  Future<void> _handleAmbiguous404({
+    required int generation,
+    required String whenParentAliveMessage,
+  }) async {
+    final fetcher = widget.onRefreshDetail ?? widget.service?.fetchRequestDetail;
+    if (fetcher == null) {
+      _popParentDeleted();
+      return;
+    }
+
+    try {
+      final latest = await fetcher(_request.id);
+      if (!mounted || generation != _requestGeneration) return;
+
+      if (latest == null) {
+        _popParentDeleted();
+        return;
+      }
+
+      setState(() {
+        _request = latest;
+        _hasChanges = true;
+        _isActionInProgress = false;
+        _isLoadingOffers = false;
+      });
+      _showSnackBar(whenParentAliveMessage);
+      if (_isOwner) {
+        await _loadOffers(page: 1, replace: true, allow404Recovery: false);
+      }
+    } on RequestBoardNotFoundException {
+      if (!mounted || generation != _requestGeneration) return;
+      _popParentDeleted();
+    } catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() {
+        _isActionInProgress = false;
+        _isLoadingOffers = false;
+      });
+      _showSnackBar('Gagal memeriksa status permintaan: $e');
+    }
+  }
+
   Future<void> _refreshDetail() async {
-    if (widget.onRefreshDetail == null) {
+    final fetcher = widget.onRefreshDetail ?? widget.service?.fetchRequestDetail;
+    if (fetcher == null) {
       _initOffersForCurrentSession();
       return;
     }
@@ -178,7 +289,7 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
     setState(() => _isLoadingDetail = true);
 
     try {
-      final latest = await widget.onRefreshDetail!(_request.id);
+      final latest = await fetcher(_request.id);
       if (!mounted || generation != _requestGeneration) return;
 
       if (latest != null) {
@@ -190,7 +301,7 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
         setState(() => _isLoadingDetail = false);
       }
 
-      if (_isOwner && widget.onLoadOffers != null) {
+      if (_isOwner && (widget.onLoadOffers != null || widget.service != null)) {
         await _loadOffers(page: 1, replace: true);
       } else if (!_isOwner) {
         setState(() {
@@ -199,6 +310,13 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
           _hasNextOffersPage = false;
         });
       }
+    } on RequestBoardNotFoundException {
+      if (!mounted || generation != _requestGeneration) return;
+      _popParentDeleted();
+    } on RequestBoardForbiddenException catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _isLoadingDetail = false);
+      _showForbiddenSnackBar(e.message);
     } catch (e) {
       if (!mounted || generation != _requestGeneration) return;
       setState(() => _isLoadingDetail = false);
@@ -206,14 +324,23 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
     }
   }
 
-  Future<void> _loadOffers({required int page, bool replace = false}) async {
-    if (!_isOwner || widget.onLoadOffers == null) return;
+  Future<void> _loadOffers({
+    required int page,
+    bool replace = false,
+    bool allow404Recovery = true,
+  }) async {
+    if (!_isOwner ||
+        (widget.onLoadOffers == null && widget.service == null)) {
+      return;
+    }
 
     final generation = _requestGeneration;
     setState(() => _isLoadingOffers = true);
 
     try {
-      final response = await widget.onLoadOffers!(_request.id, page);
+      final response = widget.onLoadOffers != null
+          ? await widget.onLoadOffers!(_request.id, page)
+          : await widget.service!.fetchOffers(_request.id, page: page);
       if (!mounted || generation != _requestGeneration) return;
 
       if (response == null) {
@@ -229,6 +356,21 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
         _hasNextOffersPage = response.hasNextPage;
         _isLoadingOffers = false;
       });
+    } on RequestBoardNotFoundException {
+      if (!mounted || generation != _requestGeneration) return;
+      if (allow404Recovery) {
+        await _handleAmbiguous404(
+          generation: generation,
+          whenParentAliveMessage:
+              'Halaman daftar penawar diperbarui dari awal.',
+        );
+      } else {
+        setState(() => _isLoadingOffers = false);
+      }
+    } on RequestBoardForbiddenException catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _isLoadingOffers = false);
+      _showForbiddenSnackBar(e.message);
     } catch (e) {
       if (!mounted || generation != _requestGeneration) return;
       setState(() => _isLoadingOffers = false);
@@ -265,6 +407,16 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
           _hasChanges = true;
           _isActionInProgress = false;
         });
+      } else if (widget.service != null) {
+        await widget.service!.submitOffer(_request.id);
+        if (!mounted || generation != _requestGeneration) return;
+        final latest = await widget.service!.fetchRequestDetail(_request.id);
+        if (!mounted || generation != _requestGeneration) return;
+        setState(() {
+          _request = latest;
+          _hasChanges = true;
+          _isActionInProgress = false;
+        });
       } else {
         // Mode lokal Tahap 3 sebelum integrasi API.
         setState(() {
@@ -288,6 +440,28 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
         _isActionInProgress = false;
       });
       _showSnackBar('Penawaran ditutup oleh pemilik permintaan.');
+    } on RequestBoardConflictException catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      if (e.code == 'offers_closed') {
+        setState(() {
+          _offersClosedLocally = true;
+          _isActionInProgress = false;
+        });
+        _showSnackBar('Penawaran ditutup oleh pemilik permintaan.');
+      } else {
+        setState(() => _isActionInProgress = false);
+        _showSnackBar(e.message);
+        if (e.code == 'request_expired' || e.code == 'request_fulfilled') {
+          await _refreshDetail();
+        }
+      }
+    } on RequestBoardNotFoundException {
+      if (!mounted || generation != _requestGeneration) return;
+      _popParentDeleted();
+    } on RequestBoardForbiddenException catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _isActionInProgress = false);
+      _showForbiddenSnackBar(e.message);
     } catch (e) {
       if (!mounted || generation != _requestGeneration) return;
       setState(() => _isActionInProgress = false);
@@ -302,8 +476,9 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
     setState(() => _isActionInProgress = true);
 
     try {
-      if (widget.onSelectOffer != null) {
-        final updated = await widget.onSelectOffer!(_request.id, offer.id);
+      final selector = widget.onSelectOffer ?? widget.service?.selectOffer;
+      if (selector != null) {
+        final updated = await selector(_request.id, offer.id);
         if (!mounted || generation != _requestGeneration) return;
         setState(() {
           _request = updated ?? _copyRequestWith(selectedOfferId: offer.id);
@@ -320,6 +495,24 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
       _showSnackBar(
         'Penawar "${offer.offeredBy.displayName}" dipilih.',
       );
+    } on RequestBoardNotFoundException {
+      if (!mounted || generation != _requestGeneration) return;
+      await _handleAmbiguous404(
+        generation: generation,
+        whenParentAliveMessage:
+            'Penawar yang dipilih sudah tidak tersedia. Daftar penawar disegarkan.',
+      );
+    } on RequestBoardConflictException catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _isActionInProgress = false);
+      _showSnackBar(e.message);
+      if (e.code == 'request_expired' || e.code == 'request_fulfilled') {
+        await _refreshDetail();
+      }
+    } on RequestBoardForbiddenException catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _isActionInProgress = false);
+      _showForbiddenSnackBar(e.message);
     } catch (e) {
       if (!mounted || generation != _requestGeneration) return;
       setState(() => _isActionInProgress = false);
@@ -339,8 +532,10 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
     setState(() => _isActionInProgress = true);
 
     try {
-      if (widget.onFulfillRequest != null) {
-        final updated = await widget.onFulfillRequest!(_request.id);
+      final fulfiller =
+          widget.onFulfillRequest ?? widget.service?.fulfillRequest;
+      if (fulfiller != null) {
+        final updated = await fulfiller(_request.id);
         if (!mounted || generation != _requestGeneration) return;
         setState(() {
           _request = updated ??
@@ -362,6 +557,20 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
         });
       }
       _showSnackBar('Permintaan ditandai terpenuhi.');
+    } on RequestBoardNotFoundException {
+      if (!mounted || generation != _requestGeneration) return;
+      _popParentDeleted();
+    } on RequestBoardConflictException catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _isActionInProgress = false);
+      _showSnackBar(e.message);
+      if (e.code == 'request_expired' || e.code == 'request_fulfilled') {
+        await _refreshDetail();
+      }
+    } on RequestBoardForbiddenException catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _isActionInProgress = false);
+      _showForbiddenSnackBar(e.message);
     } catch (e) {
       if (!mounted || generation != _requestGeneration) return;
       setState(() => _isActionInProgress = false);
@@ -403,9 +612,12 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
     setState(() => _isActionInProgress = true);
 
     try {
-      final deleted = widget.onDeleteRequest != null
-          ? await widget.onDeleteRequest!(_request.id)
-          : true;
+      bool deleted = true;
+      if (widget.onDeleteRequest != null) {
+        deleted = await widget.onDeleteRequest!(_request.id);
+      } else if (widget.service != null) {
+        await widget.service!.deleteRequest(_request.id);
+      }
       if (!mounted || generation != _requestGeneration) return;
 
       if (deleted) {
@@ -415,11 +627,34 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
       } else {
         setState(() => _isActionInProgress = false);
       }
+    } on RequestBoardNotFoundException {
+      if (!mounted || generation != _requestGeneration) return;
+      _popParentDeleted('Permintaan sudah tidak tersedia.');
+    } on RequestBoardForbiddenException catch (e) {
+      if (!mounted || generation != _requestGeneration) return;
+      setState(() => _isActionInProgress = false);
+      _showForbiddenSnackBar(e.message);
     } catch (e) {
       if (!mounted || generation != _requestGeneration) return;
       setState(() => _isActionInProgress = false);
       _showSnackBar('Gagal menghapus permintaan: $e');
     }
+  }
+
+  void _showForbiddenSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: widget.onNavigateToLogin != null
+              ? SnackBarAction(
+                  label: 'Masuk',
+                  onPressed: widget.onNavigateToLogin!,
+                )
+              : null,
+        ),
+      );
   }
 
   FoodRequest _copyRequestWith({
@@ -492,7 +727,7 @@ class _RequestDetailPageState extends State<RequestDetailPage> {
           backgroundColor: colorScheme.inversePrimary,
           title: const Text('Detail Permintaan'),
           actions: [
-            if (widget.onRefreshDetail != null)
+            if (widget.onRefreshDetail != null || widget.service != null)
               IconButton(
                 tooltip: 'Segarkan',
                 onPressed: _isLoadingDetail ? null : _refreshDetail,

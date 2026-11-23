@@ -130,6 +130,7 @@ class _RequestBoardPageState extends State<RequestBoardPage> {
         RequestDetailPage(
           request: request,
           currentUserId: provider.currentUserId,
+          service: provider.service,
           onNavigateToLogin: widget.onNavigateToLogin,
         ),
       ),
@@ -161,6 +162,7 @@ class _RequestBoardPageState extends State<RequestBoardPage> {
           currentUserId: provider.currentUserId,
           currentUserDisplayName:
               provider.sessionClient.currentUsername ?? 'Pengguna SaveBite',
+          service: provider.service,
         ),
       ),
     );
