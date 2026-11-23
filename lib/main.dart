@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:savebite_mobile/request_board/providers/request_board_provider.dart';
+import 'package:savebite_mobile/request_board/services/request_board_service.dart';
+import 'package:savebite_mobile/request_board/services/session_client.dart';
 import 'package:savebite_mobile/widgets/left_drawer.dart';
 
 void main() {
@@ -10,14 +14,33 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SaveBite',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
-        useMaterial3: true,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<SaveBiteSessionClient>(
+          create: (_) => SaveBiteSessionClient(),
+        ),
+        ProxyProvider<SaveBiteSessionClient, RequestBoardService>(
+          update: (_, sessionClient, _) => RequestBoardService(
+            sessionClient: sessionClient,
+          ),
+        ),
+        ChangeNotifierProxyProvider<RequestBoardService, RequestBoardProvider>(
+          create: (context) => RequestBoardProvider(
+            service: context.read<RequestBoardService>(),
+          ),
+          update: (_, service, previous) =>
+              previous ?? RequestBoardProvider(service: service),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'SaveBite',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2E7D32)),
+          useMaterial3: true,
+        ),
+        home: const MyHomePage(title: 'SaveBite'),
       ),
-      home: const MyHomePage(title: 'SaveBite'),
     );
   }
 }

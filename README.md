@@ -88,7 +88,7 @@ Setiap modul dikerjakan oleh satu anggota dan terdiri dari halaman-halaman Flutt
 ### 4. Food Rescue Request Board: Reshandy Taftazani Aulya
 
 **Deskripsi:** Papan interaktif bergaya forum bagi komunitas lokal untuk meminta sisa bahan makanan dalam jumlah kecil agar tidak perlu membeli baru.
-**Model Dasar:** Menyimpan detail permintaan bahan, relasi peminta, dan status pemenuhan (Pending, Terpenuhi).
+**Model Dasar:** Menyimpan detail permintaan bahan, relasi peminta, dan status pemenuhan (status tersimpan: Pending, Ditawarkan, Terpenuhi; status efektif tambahan: Kedaluwarsa).
 **Fitur CRUD:**
 
 - **Create:** Memposting permintaan sisa bahan makanan yang spesifik.
@@ -114,17 +114,19 @@ Base URL: `https://reshandy-taftazani-savebite.pws.cs.ui.ac.id`
 
 | Modul | Method | Endpoint | Fungsi |
 | ----- | ----- | ----- | ----- |
-| Autentikasi | POST | `/api/auth/login/` | Login pengguna |
-| Autentikasi | POST | `/api/auth/register/` | Registrasi pengguna |
-| Autentikasi | POST | `/api/auth/logout/` | Logout pengguna |
+| Autentikasi | POST | `/login/`, `/register/`, `/logout/` *(sesi Django; target API mobile diselaraskan dengan tim)* | Login, registrasi, dan logout pengguna |
 | 1. Katalog Resep | GET / POST | `/api/bookmarks/` | Daftar dan tambah *bookmark* |
 | 1. Katalog Resep | PUT / DELETE | `/api/bookmarks/<id>/` | Ubah catatan dan hapus *bookmark* |
 | 2. Food Rescue Planner | GET / POST | `/api/rescue-plans/` | Daftar dan tambah *rescue plan* |
 | 2. Food Rescue Planner | PUT / DELETE | `/api/rescue-plans/<id>/` | Ubah dan hapus *rescue plan* |
 | 3. Resep Komunitas | GET / POST | `/api/community-recipes/` | Daftar dan tambah resep komunitas |
 | 3. Resep Komunitas | PUT / DELETE | `/api/community-recipes/<id>/` | Ubah dan hapus resep |
-| 4. Request Board | GET / POST | `/api/requests/` | Daftar dan tambah permintaan |
-| 4. Request Board | PUT / DELETE | `/api/requests/<id>/` | Ubah status dan hapus permintaan |
+| 4. Request Board | GET / POST | `/api/v1/requests/` | Daftar (filter `q`, `status`, `mine`, `sort`, pagination 20) dan tambah permintaan (dengan header `Idempotency-Key`) |
+| 4. Request Board | GET / DELETE | `/api/v1/requests/<id>/` | Detail permintaan (publik) dan hapus permintaan (khusus owner, `204`) |
+| 4. Request Board | GET / POST | `/api/v1/requests/<id>/offers/` | Daftar penawar (khusus owner, pagination 20) dan kirim penawaran bantuan (non-owner, body `{}`) |
+| 4. Request Board | PATCH | `/api/v1/requests/<id>/selection/` | Pilih atau ganti penawar terpilih (khusus owner, `{"offer_id": <int>}`) |
+| 4. Request Board | PATCH | `/api/v1/requests/<id>/status/` | Tandai permintaan terpenuhi (khusus owner, `{"status": "fulfilled"}`) |
+| 4. Request Board | GET | `/api/v1/request-creations/<uuid:key>/` | Cek status idempotensi pembuatan permintaan setelah timeout |
 | 5. Jurnal Jejak Makanan | GET / POST | `/jurnal/api/v1/food-logs/` | Daftar log makanan milik pengguna (filter query, status, date_from, date_to, page) dan tambah log makanan |
 | 5. Jurnal Jejak Makanan | GET / PUT / PATCH / DELETE | `/jurnal/api/v1/food-logs/<id>/` | Detail, ubah (penuh/sebagian), dan hapus log makanan |
 | 5. Jurnal Jejak Makanan | GET | `/jurnal/api/v1/food-logs/summary/` | Ringkasan jumlah dan persentase makanan terselamatkan/terbuang |
